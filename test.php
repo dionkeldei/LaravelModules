@@ -11,7 +11,7 @@ class test extends Command
      *
      * @var string
      */
-    protected $signature = 'module:create {name} {folder=0}';
+    protected $signature = 'module:create {folder} {name}';
 
     /**
      * The console command description.
@@ -37,15 +37,37 @@ class test extends Command
      */
     public function handle()
     {
+      $name = $this->argument('name');
+      $folder = $this->argument('folder');
+
+      $this->editGeneralComposer();
       $this->createFolders();
       $this->createComposer();
       $this->createRoutes();
+      $this->createController();
       $this->createProvider();
+
+      $this->info('Copia "'.$folder.stripcslashes("\\").$name.stripcslashes("\\").$name.'ServiceProvider::class," en config/app.php');
+      $this->info('Corre "composer dump-autoload"');
+    }
+
+    public function editGeneralComposer(){
+      $name = $this->argument('name');
+      $folder = $this->argument('folder');
+
+      $jsonString = file_get_contents(base_path().'/composer.json');
+      $data = json_decode($jsonString, true);
+      $data['autoload']['psr-4'][$folder.'\\'.$name.'\\'] = $folder.'/'.$name.'/src/';
+      $newJsonString = json_encode($data,JSON_PRETTY_PRINT);
+      file_put_contents(base_path().'/composer.json', $newJsonString);
+
+      return true;
     }
 
     public function createFolders(){
       $name = $this->argument('name');
       $folder = $this->argument('folder');
+
       if (!file_exists(base_path().'/'.$folder)) {
           mkdir(base_path().'/'.$folder, 0755, true);
       }
@@ -53,7 +75,7 @@ class test extends Command
       if (!file_exists(base_path().'/'.$folder.'/'.$name)) {
           mkdir(base_path().'/'.$folder.'/'.$name, 0755, true);
       }else{
-        //  $this->error('   Module all ready exist in '.$this->argument('folder').'!   ');
+          $this->error('   Module all ready exist in '.$this->argument('folder').'!   ');
       }
 
       if (!file_exists(base_path().'/'.$folder.'/'.$name.'/src')) {
@@ -76,6 +98,13 @@ class test extends Command
         $response['require'] = (object) array();
         $response['autoload'] = $autoload;
 
+        $response['extra'] = (object)[
+          "laravel" => (object) [
+            "providers" => [
+              "$folder\\$name"
+            ]
+          ]
+        ];
         $fp = fopen(base_path().'/'.$folder.'/'.$name.'/composer.json', 'w');
         fwrite($fp, json_encode($response,JSON_PRETTY_PRINT));
         fclose($fp);
@@ -88,7 +117,9 @@ class test extends Command
       $folder = $this->argument('folder');
       if (!file_exists(base_path().'/'.$folder.'/'.$name.'/src/routes.php')){
         $fp = fopen(base_path().'/'.$folder.'/'.$name.'/src/routes.php', 'w');
-        fwrite($fp, "<?php\r\n\r\n");
+        $text = "<?php\r\n\r\n";
+        $text .= "Route::resource('".strtolower ($name)."','".$folder.stripcslashes("\\").$name.stripcslashes("\\").$name."Controller');";
+        fwrite($fp, $text);
         fclose($fp);
       }
       return true;
@@ -120,10 +151,72 @@ class test extends Command
        include __DIR__.'/routes.php';
       ";
       $providerText .= ' $this->loadViewsFrom'."(__DIR__.'/views', '".strtolower ( $name )."');
-     }";
+     }
+   }";
       if (!file_exists(base_path().'/'.$folder.'/'.$name.'/src/'.$name.'ServiceProvider.php')){
         $fp = fopen(base_path().'/'.$folder.'/'.$name.'/src/'.$name.'ServiceProvider.php', 'w');
         fwrite($fp, $providerText);
+        fclose($fp);
+      }
+      return true;
+    }
+
+    public function createController(){
+      $name = $this->argument('name');
+      $folder = $this->argument('folder');
+
+      $text = '<?php
+
+namespace '.$folder.stripcslashes("\\").$name.';
+
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+
+
+class '.$name.'Controller extends Controller
+{
+
+    public function index()
+    {
+       dd("Soy index de '.$name.'");
+    }
+
+    public function create()
+    {
+        //
+    }
+
+    public function store(Request $request)
+    {
+        //
+    }
+
+    public function show($id)
+    {
+        //
+    }
+
+    public function edit($id)
+    {
+        //
+    }
+
+    public function update(Request $request, $id)
+    {
+       //
+    }
+
+    public function destroy($id)
+    {
+      //
+    }
+
+
+}
+      ';
+      if (!file_exists(base_path().'/'.$folder.'/'.$name.'/src/'.$name.'Controller.php')){
+        $fp = fopen(base_path().'/'.$folder.'/'.$name.'/src/'.$name.'Controller.php', 'w');
+        fwrite($fp, $text);
         fclose($fp);
       }
       return true;
